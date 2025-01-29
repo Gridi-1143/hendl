@@ -1,0 +1,145 @@
+#!/bin/sh
+
+hentaiukr_base="https://hentaiukr.com"
+
+RED='\033[31m'
+BLUE='\033[34m'
+MAGENTA='\033[35m'
+CYAN='\033[36m'
+NC='\033[0m'
+
+query=""
+download_dir="."
+cstm_name=""
+get_related=0
+make_zip=0
+info_level=0
+version=1.0
+
+version_info() { printf "Версія ${version}\n"; }
+
+help_info() {
+    printf "%s\n" "\
+
+Використання: ${0##*/} [ПРАПОРЦІ] [ПОСИЛАННЯ]
+Прапорці:
+        -D, --download-dir
+            Можете вказати власний шлях для вихідної теки
+        -R, --rename
+            Можете вказати власну назву для вихідної теки (не використовуйте пробіли)
+        -r, --related
+            Завантажити також всі манги, пов'язані з поточною
+        -z, --zip 
+            Створювати zip архів замість вихідної теки
+        -i, --info
+            Виводити трохи інформації при завантаженні
+        -I, --INFO 
+            Виводити більше інформації при завантаженні
+        -U, --update
+            Оновити ${0##*/}
+        -V, --version
+            Вивести версію ${0##*/}
+        -h, --help 
+            Вивести це повідомлення
+Приклади використання:
+        ${0##*/} https://hentaiukr.com/manga/2298_toxic_love/
+        ${0##*/} -I -r -z https://hentaiukr.com/manga/2232_lactic_girl/
+        ${0##*/} -I -r -D ~/downloads -z -R Каеде_і_Судзу https://hentaiukr.com/manga/2255_kaede_to_suzu/
+        "
+}
+
+update() {
+    script_path="$0"
+    [ ! -w "$script_path" ] && printf "${RED}Немає прав на запис до $script_path${NC}\n" && return 1
+
+    latest_version=$(curl -s "https://raw.githubusercontent.com/Gridi-1143/hendl/main/hendl" | grep -m1 'version=' | cut -d'=' -f2)
+    [ -z "$latest_version" ] && printf "${RED}Помилка отримання версії${NC}\n" && return 1
+
+    [ "$version" = "$latest_version" ] && { printf "${BOLD}${BLUE}Встановлено останню версію${NC}\n"; return 0; }
+
+    curl -s "https://raw.githubusercontent.com/Gridi-1143/hendl/main/hendl" > "$script_path" && \
+    chmod +x "$script_path" && \
+    printf "${BOLD}${BLUE}Оновлено до версії $latest_version${NC}\n"
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -h|--help) help_info; exit 0 ;;
+        -V|--version) version_info; exit 0 ;;
+        -U|--update) update; exit 0 ;;
+        -D|--download-dir)
+            shift
+            [ $# -eq 0 ] && { printf "${RED}Вкажіть директорію для завантаження${NC}\n" >&2; exit 1; }
+            download_dir="$1"
+            ;;
+        -r|--related) get_related=1 ;;
+        -R|--rename) 
+            shift
+            [ $# -eq 0 ] && { printf "${RED}Вкажіть власну назву${NC}\n" >&2; exit 1; }
+            cstm_name="$1"
+            ;;
+        -z|--zip) make_zip=1 ;;
+        -i|--info) info_level=1 ;;
+        -I|--INFO) info_level=2 ;;
+        -*) printf "${RED}Невідомий параметр: $1${NC}\n"; help_info; exit 1 ;;
+        *) query="$1" ;;
+    esac
+    shift
+done
+
+printf '%s' "$query" | grep -q "^$hentaiukr_base" || { printf "${RED}Не посилання на hentaiukr${NC}\n"; exit 1; }
+type=$(printf '%s' "$query" | sed -E "s|${hentaiukr_base}/([^/]+)/.*|\1|")
+IFS='
+'
+
+download_manga() {
+    page=$(curl -s "$1reader.html")
+    name=$(printf '%s' "$page" | sed -En 's/.*og:title" content="([^"]*).*/\1/p')
+    pages_count=$(printf '%s' "$page" | grep -c \"dropup-page\" -)
+    [ "$info_level" -ge 1 ] && printf "${MAGENTA}%s — %s сторінок${NC}\n" "$name" "$pages_count"
+    [ -n "$cstm_name" ] && { [ "$get_related" = 1 ] && name="${cstm_name}_${i}" || name="$cstm_name"; }
+    [ "$make_zip" = 1 ] && temp_dir=$(mktemp -d) || mkdir -p "$download_dir/$name"
+    printf '%s' "$page" | grep "const pages" | sed 's/ /%20/g' | grep -o "/$type[^']*" | while read -r img; do
+        file_url="$hentaiukr_base$img"
+        file_name=$(basename "$img")
+        [ "$make_zip" = 1 ] && { 
+            [ "$info_level" = 2 ] && printf "Завантажуємо ${CYAN}%s${NC} до архіву ${BLUE}%s/${name}.zip${NC}\n" "$file_url" "$download_dir"
+            curl -s "$file_url" -o "$temp_dir/$file_name"; } \
+        || {
+            [ "$info_level" = 2 ] && printf "Завантажуємо ${CYAN}%s${NC} до ${BLUE}%s/%s/%s${NC}\n" "$file_url" "$download_dir" "$name" "$file_name"
+            curl -s "$file_url" -o "$download_dir/$name/$file_name"
+        }
+    done 
+    [ "$make_zip" = 1 ] && {
+        zip -jq "$download_dir/${name}.zip" "$temp_dir"/* 
+        rm -rf "$temp_dir"
+    } 
+}
+
+get_related() {
+    curl -s "$query" | sed -n '/<div class="list">/,/<\/body>/p' | \
+        sed -En 's|.*<a href="([^"]*)".*|\1|p' | \
+        sed '/^$/d' | sed 's/ /%20/g' | sed "s|^|$hentaiukr_base|g" > "$related_list"
+}
+
+case "$type" in 
+    manga|korean) \
+        [ "$get_related" = 1 ] && { 
+            i=1
+            related_list=$(mktemp)
+            get_related
+            download_manga "$query"
+            [ "$info_level" -ge 1 ] && printf "${BLUE}Знайдені пов'язані манги:${NC}\n" 
+            cat "$related_list" | while read line; do 
+                i=$(( i + 1))
+                download_manga "$line"
+            done 
+            rm -f "$related_list"
+        } || \
+        download_manga "$query"; 
+    ;;
+    video) printf "${BLUE}Завантаження відео поки не підтримується${NC}\n"; exit 0;;
+    eroge) printf "${BLUE}Ероге скачати не можна O_o${NC}\n"; exit 0;;
+    *) printf "${RED}Неправильне посилання${NC}\n"; exit 1;;
+esac
+
