@@ -14,19 +14,19 @@ cstm_name=""
 get_related=0
 make_zip=0
 info_level=0
-version=1.0
+version=1.1
 
 version_info() { printf "Версія ${version}\n"; }
 
 help_info() {
     printf "%s\n" "\
-
 Використання: ${0##*/} [ПРАПОРЦІ] [ПОСИЛАННЯ]
+        ВСІ ПОСИЛАННЯ І НАЗВИ ВВОДЬТЕ В ПОДВІЙНИХ ЛАПКАХ, ЯКЩО В ПОСИЛАННІ Є ЗНАК ОКЛИКУ '!' ТО СТАВТЕ ПЕРЕД НИМ '\'
 Прапорці:
         -D, --download-dir
             Можете вказати власний шлях для вихідної теки
         -R, --rename
-            Можете вказати власну назву для вихідної теки (не використовуйте пробіли)
+            Можете вказати власну назву для вихідної теки
         -r, --related
             Завантажити також всі манги, пов'язані з поточною
         -z, --zip 
@@ -99,8 +99,8 @@ download_manga() {
     [ "$info_level" -ge 1 ] && printf "${MAGENTA}%s — %s сторінок${NC}\n" "$name" "$pages_count"
     [ -n "$cstm_name" ] && { [ "$get_related" = 1 ] && name="${cstm_name}_${i}" || name="$cstm_name"; }
     [ "$make_zip" = 1 ] && temp_dir=$(mktemp -d) || mkdir -p "$download_dir/$name"
-    printf '%s' "$page" | grep "const pages" | sed 's/ /%20/g' | grep -o "/$type[^']*" | while read -r img; do
-        file_url="$hentaiukr_base$img"
+    printf '%s' "$page" | grep "const pages" | sed 's/ /%20/g' |  sed 's|\\\\|/|g' | grep -o "$type[^']*" | while read -r img; do
+        file_url="$hentaiukr_base/$img"
         file_name=$(basename "$img")
         [ "$make_zip" = 1 ] && { 
             [ "$info_level" = 2 ] && printf "Завантажуємо ${CYAN}%s${NC} до архіву ${BLUE}%s/${name}.zip${NC}\n" "$file_url" "$download_dir"
@@ -142,4 +142,4 @@ case "$type" in
     eroge) printf "${BLUE}Ероге скачати не можна O_o${NC}\n"; exit 0;;
     *) printf "${RED}Неправильне посилання${NC}\n"; exit 1;;
 esac
-
+exit 0

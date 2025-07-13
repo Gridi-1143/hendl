@@ -1,5 +1,5 @@
 <h5 align=center>
-Клієнт для Linux для завантаження манги з <a href="https://hentaiukr.com/">hentaiukr.com</a> в терміналі.
+Клієнт для Linux для завантаження манг з <a href="https://hentaiukr.com/">hentaiukr.com</a> в терміналі.
 </h5>
 
 ## Використання
