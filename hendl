@@ -14,7 +14,7 @@ cstm_name=""
 get_related=0
 make_zip=0
 info_level=0
-version=1.1
+version=1.2
 
 version_info() { printf "Версія ${version}\n"; }
 
@@ -88,19 +88,22 @@ while [ $# -gt 0 ]; do
 done
 
 printf '%s' "$query" | grep -q "^$hentaiukr_base" || { printf "${RED}Не посилання на hentaiukr${NC}\n"; exit 1; }
+
 type=$(printf '%s' "$query" | sed -E "s|${hentaiukr_base}/([^/]+)/.*|\1|")
 IFS='
 '
 
 download_manga() {
-    page=$(curl -s "$1reader.html")
+    query_url="${1%/}/"
+    page=$(curl -s "${query_url}reader.html")
     name=$(printf '%s' "$page" | sed -En 's/.*og:title" content="([^"]*).*/\1/p')
+    manga_url=$(printf '%s' "$page" | sed -En 's/.*og:image" content="\/([^"]*).*/\1/p' | sed 's|/thumbnail.*||')
     pages_count=$(printf '%s' "$page" | grep -c \"dropup-page\" -)
     [ "$info_level" -ge 1 ] && printf "${MAGENTA}%s — %s сторінок${NC}\n" "$name" "$pages_count"
     [ -n "$cstm_name" ] && { [ "$get_related" = 1 ] && name="${cstm_name}_${i}" || name="$cstm_name"; }
     [ "$make_zip" = 1 ] && temp_dir=$(mktemp -d) || mkdir -p "$download_dir/$name"
-    printf '%s' "$page" | grep "const pages" | sed 's/ /%20/g' |  sed 's|\\\\|/|g' | grep -o "$type[^']*" | while read -r img; do
-        file_url="$hentaiukr_base/$img"
+    printf '%s' "$page" | grep "const pages" | grep -o "'src': '[^']*'" | sed "s/'src': '//;s/'//" | while read -r img; do
+        file_url="$hentaiukr_base/$manga_url/$img"
         file_name=$(basename "$img")
         [ "$make_zip" = 1 ] && { 
             [ "$info_level" = 2 ] && printf "Завантажуємо ${CYAN}%s${NC} до архіву ${BLUE}%s/${name}.zip${NC}\n" "$file_url" "$download_dir"
@@ -118,7 +121,7 @@ download_manga() {
 
 get_related() {
     curl -s "$query" | sed -n '/<div class="list">/,/<\/body>/p' | \
-        sed -En 's|.*<a href="([^"]*)".*|\1|p' | \
+        sed -En 's|.*<a\s+href="([^"]*)".*|\1|p' | \
         sed '/^$/d' | sed 's/ /%20/g' | sed "s|^|$hentaiukr_base|g" > "$related_list"
 }
 
